@@ -114,25 +114,29 @@ exerr ()
 jcmd-build () {
     [ $# -gt 0 ] || exerr ${jcmd_usage_build}
 
-    while getopts j: arg; do
+    while getopts j:w arg; do
         case ${arg} in
             j)  jcmd_build_opt="-j${OPTARG}"
+                ;;
+            w)  jcmd_build_world="YES"
                 ;;
             ?) exerr ${jcmd_usage_build};;
         esac;
     done;
-    shift $(( ${OPTIND} - 1 ))
-    
+
     [ $# -gt 0 ] || exerr ${jcmd_usage_build}
 
     echo "FreeBSD Jail Commands  -  Build"
 
-    cd /usr/obj
-    chflags -R noschg *
-    rm -rf *
+    if [ "${jcmd_build_world}" = "YES" ]; then
+        cd /usr/obj
+        chflags -R noschg *
+        rm -rf *
 
-    cd /usr/src
-    time make ${jcmd_build_opt} buildworld
+        cd /usr/src
+        time make ${jcmd_build_opt} buildworld
+    fi
+    exit
 }
 
 
@@ -329,6 +333,7 @@ jcmd_usage_stop="${jcmd_usage_header}
 jcmd_usage_build="${jcmd_usage_header}
     \nUsage: ${jcmd_cmd} ${jcmd_usage} [-j] \
     \n\t-j\t\t- threads to use \
+    \n\t-w\t\t- buildworld \
     \n"
 jcmd_usage_new="${jcmd_usage_header}
     \nUsage: ${jcmd_cmd} ${jcmd_usage} [-fidp] [-r path] jailname \
