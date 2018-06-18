@@ -117,6 +117,7 @@ EOF
 
 # DEFAULT SETTINGS
 jcmd_cmd=`basename -- $0`
+jcmd_file=`readlink -f $0`
 jcmd_version='0.0.1'
 jcmd_name='FreeBSD Jail Commands'            
 jcmd_author='Bruce Marriner <bruce@sqls.net>'
@@ -184,7 +185,7 @@ parse_cmdline () {
     # Parse action commands
     while [ $# -gt 0 ]; do
         case "$1" in
-            buildworld | installworld |  distribution | make | remove | start | stop | restart | shell | login)
+            mklinks | rmlinks | lslinks | buildworld | installworld |  distribution | make | remove | start | stop | restart | shell | login)
                 COMMANDS="${COMMANDS} $1"
 
                 # TODO: Add here, code to parse command specific options.
@@ -207,6 +208,39 @@ parse_cmdline () {
 
 ################################################################################
 #### Core functionality -- the actual work gets done here
+
+#-------------------------------------------------------------------------------
+# Jail Commands - mklinks
+# Create symbolic links in /usr/local/bin for jcmds
+jcmd_mklinks () {
+    echo "Jail Commands  -  Make Links"
+
+    ln -s $jcmd_file /usr/local/bin/jcmd
+    ln -s $jcmd_file /usr/local/bin/jup
+    ln -s $jcmd_file /usr/local/bin/jdown
+    ln -s $jcmd_file /usr/local/bin/jsh
+
+    jcmd_lslinks
+}
+
+#-------------------------------------------------------------------------------
+# Jail Commands - rmlinks
+# Create symbolic links in /usr/local/bin for jcmds
+jcmd_rmlinks () {
+    echo "Jail Commands  -  Remove Links"
+
+    jcmd_lslinks
+    find -L /usr/local/bin -samefile $jcmd_file -exec rm {} \;
+}
+
+#-------------------------------------------------------------------------------
+# Jail Commands - lslinks
+# Create symbolic links in /usr/local/bin for jcmds
+jcmd_lslinks () {
+    echo "Jail Commands  -  List Links"
+
+    find -L /usr/local/bin -samefile $jcmd_file
+}
 
 #-------------------------------------------------------------------------------
 # Jail Commands - cleanworld
