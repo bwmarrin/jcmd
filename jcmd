@@ -79,33 +79,27 @@
 
 usage () {
 	cat <<EOF
-usage: `basename $0` [global options] command [command options] ...
+usage: `basename $0` [global options] command [jailname] [command options] ...
 
 Global Options:
-  -? optarg    -- PLACE HOLDER PLACE HOLDER
-                  (default: PLACEHOLDER)
-  -?           -- PLACE HOLDER
-  -b basedir   -- Operate on a system mounted at basedir
-                  (default: /)
-  -d workdir   -- Store working files in workdir
-                  (default: /var/db/freebsd-update/)
-  -f conffile  -- Read configuration options from conffile
-                  (default: /usr/local/etc/jcmd.conf)
-  -r release   -- Target for upgrade (e.g., 6.2-RELEASE)
-  -s server    -- Server from which to fetch updates
-                  (default: update.FreeBSD.org)
+  -n <jailname>  -- Name of Jail
+  -d <destdir>   -- Destination directory
+  -j <threads#>  -- Number of Threads to use
 
-  -i           -- interactive mode
-  -x           -- trace mode
-  -j jail      -- name of a specific jail
+  -f             -- Force
+  -v             -- Verbose
 
 
 Commands:
   buildworld   -- Build userland from /usr/src source 
-   -j threads  -- Number of threads to use when building
   installworld -- Install userland from /usr/src source
-  distribution -- Install distrubution configuration files from /usr/src/etc
-  placeholder  -- PLACE HOLDER ..  . . .. as  asdasd adsfa
+  distribution -- Install distrubution from /usr/src/etc
+  make         -- Make a new Jail
+  up           -- Bring jail up
+  down         -- Shutdown jail
+  shell        -- Open shell inside jail
+  login        -- Login to jail
+
 EOF
 	exit 0
 }
@@ -113,35 +107,49 @@ EOF
 
 
 ################################################################################
-#### Configuration processing functions
+#### Configuration Settings
+#### You can override these settings in global or user configuration file.
 
-# DEFAULT SETTINGS
+# The shell to use for jcmd_shell method
+jcmd_shell='csh'
+
+# The distribution source to use when creating a new jail
+# 'source' - Use /usr/src (buildworld)
+# 'dist'   - Download distribution files
+jcmd_source='source' # dist for distribution files, source for /usr/src 
+
+# The base path of all jails
+jcmd_base_path='/jail'
+
+# Use ZFS for Jails?
+# 1 - Yes
+# 0 - No
+jcmd_use_zfs=0
+
+# The base ZFS pool for jails (when using ZFS)
+jcmd_base_zfs=''
+
+# Packages to be installed when making a new Jail system
+# e.g. 'vim-console zsh git'
+jcmd_preinstall='vim-console zsh git'
+
+
+# Read in configuration files
+# System settings, overrides defaults.
+[ -f /usr/local/etc/jcmd.conf ] && . /usr/local/etc/jcmd.conf
+
+# User settings, overrides defaults & system settings.
+[ -f ~/.jcmdrc ] && . ~/.jcmdrc
+
+
+################################################################################
+#### Builtin Variables
 jcmd_cmd=`basename -- $0`
 jcmd_file=`readlink -f $0`
 jcmd_version='0.0.1'
 jcmd_name='FreeBSD Jail Commands'            
 jcmd_author='Bruce Marriner <bruce@sqls.net>'
 jcmd_copyright="Copyright 2013-2018 ${jcmd_author}. All rights reserved."
-jcmd_shell='csh'
-jcmd_source='source' # dist for distribution files, source for /usr/src 
-
-
-
-# OPTIONAL SETTINGS
-# These are here as a reference to additional settings that can be added to
-# your local configuration files (see next section)
-jcmd_base_path='' # The base filesystem path for new jails
-jcmd_base_zfs=''  # The base ZFS pool/dataset for new jails (when using ZFS)
-
-
-
-# LOAD SETTINGS
-# Global settings, overrides defaults.
-[ -f /usr/local/etc/jcmd.conf ] && . /usr/local/etc/jcmd.conf
-
-# User settings, overrides defaults & global settings.
-[ -f ~/.jcmdrc ] && . ~/.jcmdrc
-
 
 
 ################################################################################
@@ -153,18 +161,26 @@ jcmd_base_zfs=''  # The base ZFS pool/dataset for new jails (when using ZFS)
 parse_cmdline () {
 
     # Parse global options
-    while getopts ":d:b:t:j:" opt; do
+    while getopts fvn:d:j: opt; do
         case $opt in
-            j)
+            f)
+                jcmd_force=TRUE
+                shift
+                ;;
+            v)
+                jcmd_verbose=TRUE
+                shift
+                ;;
+            n)
                 jcmd_jailname="${OPTARG}"
                 shift
                 ;;
-            b)
-                jcmd_basedir="${OPTARG}"
+            d)
+                jcmd_destdir="${OPTARG}"
                 shift
                 ;;
-            t)
-                jcmd_threads="${OPTARG}"
+            j)
+                jcmd_threads="-j${OPTARG}"
                 shift
                 ;;
             \?)
@@ -185,7 +201,7 @@ parse_cmdline () {
     # Parse action commands
     while [ $# -gt 0 ]; do
         case "$1" in
-            mklinks | rmlinks | lslinks | buildworld | installworld |  distribution | make | remove | start | stop | restart | shell | login)
+            up | down | mklinks | rmlinks | lslinks | buildworld | installworld |  distribution | make | remove | restart | shell | login)
                 COMMANDS="${COMMANDS} $1"
 
                 # TODO: Add here, code to parse command specific options.
@@ -246,9 +262,7 @@ jcmd_lslinks () {
 # Jail Commands - cleanworld
 # This cleans the /usr/obj direction so a fresh buildworld can be run
 jcmd_cleanworld () {
-
     echo "Jail Commands  -  Clean World"
-    echo "Args Left: $@"
 
     cd /usr/obj
     chflags -R noschg *
@@ -260,35 +274,31 @@ jcmd_cleanworld () {
 # https://www.freebsd.org/doc/handbook/jails-build.html
 # https://www.freebsd.org/doc/handbook/makeworld.html
 jcmd_buildworld () {
-
     echo "Jail Commands  -  Build World"
-    echo "Args Left: $@"
 
     cd /usr/src
-    time make buildworld
+    time make $jcmd_threads buildworld
 }
 
 #------------------------------------------------------------------------------
-# Jail Commands - installworld -b basedir
+# Jail Commands - installworld
 # This function follows the FreeBSD handbook steps for installing from source.
 # https://www.freebsd.org/doc/handbook/jails-build.html
 
 jcmd_installworld () {
-
     echo "Jail Commands  -  Install World"
-    echo "Args Left: $@"
 
-    if [ -z "$jcmd_basedir" ]
+    if [ -z "$jcmd_destdir" ]
     then
-        echo "Jail Base Directory not provided, cannot continue."
+        echo "Destination Directory not provided, cannot continue."
         exerr ${usage}
         exit
     fi
 
-    [ ! -d $jcmd_basedir ] && exerr "Jail Base Directory does not exist, cannot continue."
+    [ ! -d $jcmd_destdir ] && exerr "Destination Directory does not exist, cannot continue."
 
     cd /usr/src
-    make installworld DESTDIR=${jcmd_basedir}
+    make installworld DESTDIR=${jcmd_destdir}
 }
 
 
@@ -297,21 +307,19 @@ jcmd_installworld () {
 # This function follows the FreeBSD handbook steps for installing from source.
 # https://www.freebsd.org/doc/handbook/jails-build.html
 jcmd_distribution () {
-
     echo "Jail Commands  -  Distribution"
-    echo "Args Left: $# $@"
 
-    if [ -z "$jcmd_basedir" ]
+    if [ -z "$jcmd_destdir" ]
     then
-        echo "Jail Base Directory not provided, cannot continue."
+        echo "Destination Directory not provided, cannot continue."
         exerr ${usage}
         exit
     fi
 
-    [ ! -d $jcmd_basedir ] && exerr "Jail Base Directory does not exist, cannot continue."
+    [ ! -d $jcmd_destdir ] && exerr "Destination Directory does not exist, cannot continue."
 
     cd /usr/src
-    make distribution DESTDIR=${jcmd_basedir}
+    make distribution DESTDIR=${jcmd_destdir}
 }
 
 
@@ -319,17 +327,7 @@ jcmd_distribution () {
 # Jail Commands - make
 # Make creates a new jail
 jcmd_make () {
-
     echo "Jail Commands  -  Make"
-
-    # need a jcmd_rootdir so base can be set off name
-
-    if [ -z "$jcmd_basedir" ]
-    then
-        echo "Jail Base Directory not provided, cannot continue."
-        exerr ${usage}
-        exit
-    fi
 
     if [ -z "$jcmd_jailname" ]
     then
@@ -338,19 +336,26 @@ jcmd_make () {
         exit
     fi
 
-    [  -d $jcmd_basedir ] && exerr "Jail Base Directory already exists, cannot continue."
+    if [ -z "$jcmd_destdir" ]
+    then
+        echo "Destination Directory not provided, cannot continue."
+        exerr ${usage}
+        exit
+    fi
+
+#    [  -d $jcmd_destdir ] && exerr "Destination Directory already exists, cannot continue."
 
     # Create the folder and copy over world/dist files
-    mkdir -p ${jcmd_basedir}
+    mkdir -p ${jcmd_destdir}
     jcmd_installworld
     jcmd_distribution 
 
     # Install Ports Collection - should be optional
-    portsnap -p ${jcmd_basedir}/usr/ports fetch extract
+    #portsnap -p ${jcmd_destdir}/usr/ports fetch extract
 
     # Mimic host system to initialize the Jail with some hopefully sane defaults
-    cp /etc/resolv.conf ${jcmd_basedir}/etc/resolv.conf
-    cp /etc/localtime ${jcmd_basedir}/etc/localtime
+    cp /etc/resolv.conf ${jcmd_destdir}/etc/resolv.conf
+    cp /etc/localtime ${jcmd_destdir}/etc/localtime
 
     # Configure an initial rc.conf, should be customized by user.
     echo "#
@@ -360,13 +365,18 @@ cron_flags=\"\$cron_flags -J 15\"   # Prevent lots of jails running cron jobs at
 syslogd_flags=\"-ss\"              # Disable syslogd listening for incoming connections
 sendmail_enable=\"NONE\"           # Comppletely disable sendmail
 clear_tmp_enable=\"YES\"           # Clear /tmp at startup
-sshd_enable=\"YES\"                # Enable sshd" > ${jcmd_basedir}/etc/rc.conf
+sshd_enable=\"YES\"                # Enable sshd" > ${jcmd_destdir}/etc/rc.conf
 
 
-    # Echo out a jail{} config skeleton to add to /etc/jail.conf
+    # Need a flag for this..
+    # if jcmd_preinstall != null, then
+    if [ "$jcmd_preinstall" ]
+    then
+        echo "Installing Packages ${jcmd_preinstall}"
+        pkg -c $jcmd_destdir install -y $jcmd_preinstall
+    fi
+
     echo You must now create a jail configuration file in /etc/jail.conf
-
-    # 
 }
 
 
@@ -374,7 +384,6 @@ sshd_enable=\"YES\"                # Enable sshd" > ${jcmd_basedir}/etc/rc.conf
 # Jail Commands - up
 # Start up a existing Jail
 jcmd_up () {
-
     echo "Jail Commands  -  Up"
 
     if [ -z "$jcmd_jailname" ]
@@ -396,7 +405,6 @@ jcmd_up () {
 # Jail Commands - shell
 # Open a shell session within the Jail
 jcmd_shell () {
-
     echo "Jail Commands  -  Shell (${jcmd_jailname})"
 
     if [ -z "$jcmd_jailname" ]
@@ -414,8 +422,7 @@ jcmd_shell () {
 # Jail Commands - login
 # Login to the Jail
 jcmd_login () {
-
-    echo "FreeBSD Jail Commands  -  Login (${jcmd_jailname})"
+    echo "Jail Commands  -  Login (${jcmd_jailname})"
 
     if [ -z "$jcmd_jailname" ]
     then
@@ -432,8 +439,7 @@ jcmd_login () {
 # Jail Commands - down
 # Shut down a running Jail
 jcmd_down () {
-
-    echo "FreeBSD Jail Commands  -  Down"
+    echo "Jail Commands  -  Down"
 
     if [ -z "$jcmd_jailname" ]
     then
@@ -455,7 +461,6 @@ jcmd_down () {
 # Jail Commands - restart
 # Restart a running Jail
 jcmd_restart () {
-
     echo "Jail Commands  -  Restart"
 
     if [ -z "$jcmd_jailname" ]
@@ -472,20 +477,19 @@ jcmd_restart () {
 # Jail Commands - remove
 # Remove all files associated with a specific Jail
 jcmd_remove () {
-
     echo "Jail Commands  -  Remove"
 
-    if [ -z "$jcmd_basedir" ]
+    if [ -z "$jcmd_destdir" ]
     then
-        echo "Jail Base Directory not provided, cannot continue."
+        echo "Destination Directory not provided, cannot continue."
         exerr ${usage}
         exit
     fi
 
-    [ ! -d $jcmd_basedir ] && exerr "Jail Base Directory does not exist, cannot continue."
+    [ ! -d $jcmd_destdir ] && exerr "Destination Directory does not exist, cannot continue."
 
-    chflags -R noschg ${jcmd_basedir}
-    rm -rfv ${jcmd_basedir}
+    chflags -R noschg ${jcmd_destdir}
+    rm -rf ${jcmd_destdir}
     
     echo "You may now want to delete any /etc/jail.conf entry"
     echo "along with any /etc/fstab.jailname if used."
@@ -502,20 +506,6 @@ exerr ()
     exit 1; 
 }
 
-#-------------------------------------------------------------------------------
-# Using the command line, configuration file, and defaults,
-# set all the parameters which are needed later.
-get_params() {
-    #	init_params
-    parse_cmdline $@
-    #	sanity_conffile
-    #	default_conffile
-    #	parse_conffile
-    #	default_params
-}
-
-
-
 ################################################################################
 #### Entry point
 
@@ -525,7 +515,7 @@ export PATH=/sbin:/bin:/usr/sbin:/usr/bin:${PATH}
 # Set LC_ALL in order to avoid problems with character ranges like [A-Z].
 export LC_ALL=C
 
-get_params $@
+parse_cmdline $@
 for COMMAND in ${COMMANDS}; do
     jcmd_${COMMAND}
 done
@@ -534,4 +524,3 @@ done
 
 ################################################################################
 #### Exit Normally
-echo Jail Commands exiting normally.
