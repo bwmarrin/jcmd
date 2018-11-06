@@ -40,7 +40,7 @@ This is just a simple single file script.  You can clone the repo to your system
 or just download the script file itself and copy it to anywhere on your system
 you like.  I recommend /opt/jcmd as a good installation folder.
 
-Once you have the script coped to your system you can use the below command to
+Once you have the script copied to your system you can use the below command to
 create symbolic links in /usr/local/bin for the script.
 
 ```
