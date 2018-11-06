@@ -3,7 +3,17 @@ jcmd - FreeBSD Jail Commands
 
 <img align="right" src="https://www.freebsd.org/gifs/doc.jpg">
 
-jcmd is a **sh**ell script to help with building and working with FreeBSD jails. 
+jcmd is a **sh**ell script for building and working with FreeBSD jails and provides:
+* Configuration via global or user level settings
+* Build jails from source or bsdinstall
+* Remove Jail files
+* Start / Stop / Restart Jails
+* Restart jails
+* Login to shell
+* Update jail to latest patch level
+* Run IDS test on jail
+* Alias commands, **jsh**, **jup**, **jdown** to work with jails easier.
+* 
 
 jcmd was wrote mostly from scratch however the script is influenced
 by and contains snippts from the FreeBSD handbook, freebsd-update, portsnap, 
@@ -49,7 +59,7 @@ jcmd mklinks
 
 ### Usage
 ```
-usage: `basename $0` [options] command [jailname]
+usage: jcmd [options] command [jailname]
 
 Options:
  -d <destdir>   -- Destination directory
