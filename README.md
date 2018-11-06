@@ -4,6 +4,7 @@ jcmd - FreeBSD Jail Commands
 <img align="right" src="https://www.freebsd.org/gifs/doc.jpg">
 
 jcmd is a **sh**ell script for building and working with FreeBSD jails and provides:
+* A cheatsheet of commands when doing jails "The Hard Way"
 * Configuration via global or user level settings
 * Build jails from source or bsdinstall
 * Remove Jail files
