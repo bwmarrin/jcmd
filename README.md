@@ -66,10 +66,11 @@ Options:
  -j <threads#>  -- Number of Threads to use
 
 Commands:
- mklinks -- Create symbolic links in /usr/local/bin for jcmds
- rmlinks -- Remove symbolic links in /usr/local/bin for jcmds 
- lslinks -- List symbolic links in /usr/local/bin for jcmds
+ mklinks -- Create symbolic links in /usr/local/bin for jcmd
+ rmlinks -- Remove symbolic links in /usr/local/bin for jcmd 
+ lslinks -- List symbolic links in /usr/local/bin for jcmd
 
+ cleanworld   -- Cleans the /usr/obj folder
  buildworld   -- Build userland from /usr/src source 
  installworld -- Install userland from /usr/src source
  distribution -- Install distrubution from /usr/src/etc
