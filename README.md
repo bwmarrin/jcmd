@@ -8,12 +8,11 @@ jcmd is a **sh**ell script for building and working with FreeBSD jails and provi
 * Build jails from source or bsdinstall
 * Remove Jail files
 * Start / Stop / Restart Jails
-* Restart jails
-* Login to shell
+* Login to Jail
+* Open root shell inside Jail
 * Update jail to latest patch level
 * Run IDS test on jail
 * Alias commands, **jsh**, **jup**, **jdown** to work with jails easier.
-* 
 
 jcmd was wrote mostly from scratch however the script is influenced
 by and contains snippts from the FreeBSD handbook, freebsd-update, portsnap, 
