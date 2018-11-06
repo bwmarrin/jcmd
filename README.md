@@ -10,9 +10,9 @@ by and contains snippts from the FreeBSD handbook, freebsd-update, portsnap,
 mkdir, rmdir, and the ZFS tools.
 
 ### Mini FAQ 
-Q) Why not just follow the Handbook?
-a) Because after a dozen jails (or maybe less) following the Handbook method 
-each time might become cumbersome for some.
+* Q) Why not just follow the Handbook?
+    * a) Because after a dozen jails (or maybe less) following the Handbook method 
+        each time might become cumbersome for some.
 
 * Q) Why not just use ezJail?
     * a) Good question! ezJail is thoroughly tested, has more features, is 
